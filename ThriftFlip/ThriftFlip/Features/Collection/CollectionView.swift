@@ -26,13 +26,15 @@ struct CollectionView: View {
 
     // MARK: - Background
 
+    @Environment(\.colorScheme) private var colorScheme
+
     private var backgroundGradient: some View {
         ZStack {
             Color.tfBackground
 
             // Subtle green halo top-left
             RadialGradient(
-                colors: [TFColor.gainGreen.opacity(0.08), .clear],
+                colors: [TFColor.gainGreen.opacity(colorScheme == .dark ? 0.08 : 0.12), .clear],
                 center: UnitPoint(x: 0.1, y: -0.05),
                 startRadius: 0,
                 endRadius: 600
@@ -40,7 +42,7 @@ struct CollectionView: View {
 
             // Subtle gold halo top-right
             RadialGradient(
-                colors: [TFColor.gold.opacity(0.05), .clear],
+                colors: [TFColor.gold.opacity(colorScheme == .dark ? 0.05 : 0.10), .clear],
                 center: UnitPoint(x: 0.95, y: 0.02),
                 startRadius: 0,
                 endRadius: 500
@@ -162,14 +164,35 @@ struct CollectionView: View {
             } else {
                 LazyVGrid(columns: columns, spacing: TFSpacing.md) {
                     ForEach(viewModel.filteredItems) { item in
-                        CollectionCard(item: item) {
-                            // Item detail navigation
-                        }
+                        CollectionCard(
+                            gradientColors: (
+                                Color(hex: item.thumbnailColor.primary),
+                                Color(hex: item.thumbnailColor.secondary)
+                            ),
+                            garmentIcon: TFIcon.garmentIcon(for: item.identification.garmentType),
+                            confidenceLevel: item.confidence.level,
+                            confidenceScore: item.confidence.score,
+                            brand: item.identification.brand,
+                            itemName: item.identification.itemName,
+                            price: formatPrice(item.priceRange.median),
+                            priceRange: "\(formatPrice(item.priceRange.low)) – \(formatPrice(item.priceRange.high))",
+                            isLowConfidence: item.confidence.level == .low || item.confidence.level == .insufficient,
+                            isCorrected: item.corrected,
+                            onTap: {
+                                // Item detail navigation
+                            }
+                        )
                     }
                 }
                 .padding(.horizontal, TFSpacing.md)
             }
         }
+    }
+    private func formatPrice(_ value: Double) -> String {
+        if value.truncatingRemainder(dividingBy: 1) == 0 {
+            return "$\(Int(value))"
+        }
+        return String(format: "$%.2f", value)
     }
 }
 

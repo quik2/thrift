@@ -37,9 +37,10 @@ struct FilterChip: View {
             .overlay {
                 if !isSelected {
                     Capsule()
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                        .stroke(TFColor.borderSubtle, lineWidth: 1)
                 }
             }
+            .animation(.easeInOut(duration: 0.2), value: isSelected)
         }
         .accessibilityLabel(label)
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)

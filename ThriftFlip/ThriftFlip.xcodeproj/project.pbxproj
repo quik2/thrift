@@ -36,7 +36,6 @@
 		A1000000000000000000020 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				A1000000000000000000030 /* ThriftFlip.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -46,7 +45,7 @@
 /* Begin PBXNativeTarget section */
 		A1000000000000000000040 /* ThriftFlip */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A1000000000000000000060;
+			buildConfigurationList = A1000000000000000000060 /* Build configuration list for PBXNativeTarget "ThriftFlip" */;
 			buildPhases = (
 				A1000000000000000000011 /* Sources */,
 				A1000000000000000000010 /* Frameworks */,
@@ -63,7 +62,6 @@
 			packageProductDependencies = (
 			);
 			productName = ThriftFlip;
-			productReference = A1000000000000000000030;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -76,7 +74,7 @@
 				LastSwiftUpdateCheck = 1620;
 				LastUpgradeCheck = 1620;
 			};
-			buildConfigurationList = A1000000000000000000070;
+			buildConfigurationList = A1000000000000000000070 /* Build configuration list for PBXProject "ThriftFlip" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -85,7 +83,7 @@
 			);
 			mainGroup = A1000000000000000000002;
 			preferredProjectObjectVersion = 77;
-			productRefGroup = A1000000000000000000020;
+			productRefGroup = A1000000000000000000020 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -247,7 +245,6 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
-
 	};
 	rootObject = A1000000000000000000050 /* Project object */;
 }

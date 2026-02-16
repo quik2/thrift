@@ -2,6 +2,19 @@ import SwiftUI
 
 struct TFGlassCard: ViewModifier {
     var cornerRadius: CGFloat = TFRadius.large
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var borderColor: Color {
+        colorScheme == .dark ? Color.white.opacity(0.18) : Color.black.opacity(0.06)
+    }
+
+    private var innerHighlight: Color {
+        colorScheme == .dark ? Color.white.opacity(0.18) : Color.white.opacity(0.7)
+    }
+
+    private var shadowColor: Color {
+        colorScheme == .dark ? .black.opacity(0.25) : .black.opacity(0.08)
+    }
 
     func body(content: Content) -> some View {
         content
@@ -10,11 +23,11 @@ struct TFGlassCard: ViewModifier {
                     .fill(.ultraThinMaterial)
                     .overlay(
                         RoundedRectangle(cornerRadius: cornerRadius)
-                            .fill(Color.tfCardSurface.opacity(0.45))
+                            .fill(Color.tfCardSurface.opacity(colorScheme == .dark ? 0.45 : 0.85))
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: cornerRadius)
-                            .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                            .stroke(borderColor, lineWidth: 1)
                     )
                     .overlay(alignment: .top) {
                         UnevenRoundedRectangle(
@@ -23,13 +36,13 @@ struct TFGlassCard: ViewModifier {
                             bottomTrailingRadius: 0,
                             topTrailingRadius: cornerRadius
                         )
-                        .stroke(Color.white.opacity(0.12), lineWidth: 0.5)
+                        .stroke(innerHighlight, lineWidth: 1.0)
                         .frame(height: cornerRadius * 2)
                         .clipped()
                     }
             }
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-            .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
+            .shadow(color: shadowColor, radius: colorScheme == .dark ? 12 : 8, y: colorScheme == .dark ? 4 : 2)
     }
 }
 

@@ -17,9 +17,9 @@ enum TFColor {
     static let warning = Color(hex: "#EB5D2A")
     static let gold = Color(hex: "#F6C86A")
 
-    // MARK: - Borders
-    static let borderSubtle = Color.white.opacity(0.12)
-    static let borderInnerHighlight = Color.white.opacity(0.06)
+    // MARK: - Borders (adaptive: white in dark, black in light)
+    static let borderSubtle = Color(light: Color.black.opacity(0.08), dark: Color.white.opacity(0.12))
+    static let borderInnerHighlight = Color(light: Color.black.opacity(0.04), dark: Color.white.opacity(0.06))
 }
 
 // MARK: - Fallback colors when asset catalog is not configured
@@ -47,8 +47,8 @@ extension Color {
     }
 
     // Adaptive colors that resolve correctly in light/dark
-    static let tfBackground = Color(light: Color(hex: "#FFFFFF"), dark: Color(hex: "#1F2123"))
-    static let tfCardSurface = Color(light: Color(hex: "#F5F5F7"), dark: Color(hex: "#2A2C2E"))
+    static let tfBackground = Color(light: Color(hex: "#F2F2F7"), dark: Color(hex: "#1F2123"))
+    static let tfCardSurface = Color(light: Color(hex: "#FFFFFF"), dark: Color(hex: "#2A2C2E"))
     static let tfTextPrimary = Color(light: Color(hex: "#1A1A1A"), dark: Color(hex: "#FFFFFF"))
     static let tfTextSecondary = Color(light: Color(hex: "#6B7280"), dark: Color(hex: "#9CA3AF"))
     static let tfTextTertiary = Color(light: Color(hex: "#9CA3AF"), dark: Color(hex: "#48484A"))

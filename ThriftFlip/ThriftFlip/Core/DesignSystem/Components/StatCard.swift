@@ -37,7 +37,7 @@ struct StatCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: TFSpacing.xs) {
             Text(value)
                 .font(TFFont.title2)
                 .monospacedDigit()
@@ -53,9 +53,9 @@ struct StatCard: View {
             if let trend, let trendValue {
                 HStack(spacing: 2) {
                     Image(systemName: trendIcon)
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(TFFont.micro.weight(.semibold))
                     Text(trendValue)
-                        .font(.system(size: 11))
+                        .font(TFFont.micro)
                 }
                 .foregroundStyle(trendColor)
                 .lineLimit(1)

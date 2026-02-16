@@ -5,6 +5,7 @@ struct PriceHistoryChart: View {
     let dataPoints: [PriceDataPoint]
     @State private var selectedPoint: PriceDataPoint?
     @State private var tooltipOpacity: Double = 0
+    @Environment(\.colorScheme) private var colorScheme
 
     private var minValue: Double {
         (dataPoints.map(\.value).min() ?? 0) * 0.85
@@ -21,10 +22,10 @@ struct PriceHistoryChart: View {
                 ForEach(["1W", "1M", "3M", "ALL"], id: \.self) { range in
                     Text(range)
                         .font(.system(size: 12, weight: range == "ALL" ? .semibold : .regular))
-                        .foregroundStyle(range == "ALL" ? .white : Color.tfTextTertiary)
+                        .foregroundStyle(range == "ALL" ? (colorScheme == .dark ? Color.white : Color.white) : Color.tfTextSecondary)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(range == "ALL" ? TFColor.gainGreen.opacity(0.3) : Color.white.opacity(0.06))
+                        .background(range == "ALL" ? TFColor.gainGreen.opacity(colorScheme == .dark ? 0.3 : 0.85) : (colorScheme == .dark ? Color.white.opacity(0.06) : Color.black.opacity(0.05)))
                         .clipShape(Capsule())
                 }
                 Spacer()
@@ -41,7 +42,7 @@ struct PriceHistoryChart: View {
                     .foregroundStyle(
                         LinearGradient(
                             colors: [
-                                TFColor.gainGreen.opacity(0.2),
+                                TFColor.gainGreen.opacity(colorScheme == .dark ? 0.2 : 0.3),
                                 TFColor.gainGreen.opacity(0.0)
                             ],
                             startPoint: .top,
@@ -147,7 +148,7 @@ struct PriceHistoryChart: View {
                 .clipShape(RoundedRectangle(cornerRadius: TFRadius.small))
                 .overlay(
                     RoundedRectangle(cornerRadius: TFRadius.small)
-                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                        .stroke(TFColor.borderSubtle, lineWidth: 1)
                 )
                 .opacity(tooltipOpacity)
                 .transition(.opacity)

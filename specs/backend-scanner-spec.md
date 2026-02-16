@@ -38,21 +38,33 @@
                               [Multimodal Fusion + Confidence]
                                           │
                                           ▼
-                              [POST /api/v1/scan] ──network──> [FastAPI on Fly.io]
+                              [POST /api/v1/scan] ──network──> [FastAPI on Render]
                                                                     │
                                           ┌─────────────────────────┤
                                           ▼                         ▼
-                                   [eBay Browse API]     [Apify Sold Listings]
+                                   [eBay Browse API]     [eBay Marketplace Insights]
                                    (active listings)     (90-day sold data)
                                           │                         │
                                           └──────────┬──────────────┘
                                                      ▼
                                               [Pricing Engine]
-                                              (filter → weight → compute range)
+                                              (filter → weight → separate sold/active → compute ranges)
+                                                     │
+                                                     ▼
+                                              [Market Insights]
+                                              (sell-through rate, days to sell, demand)
+                                                     │
+                                                     ▼
+                                              [Platform Fee Calculator]
+                                              (eBay, Poshmark, Mercari, Depop, Whatnot)
+                                                     │
+                                                     ▼
+                                              [Buy/Pass Signal Engine]
+                                              (user settings + margins + sell-through → green/yellow/red)
                                                      │
                                                      ▼
                                               [ScanResult Response]
-                                              (price range + confidence + comps)
+                                              (pricing + market insights + platform comparison + buy signal)
 ```
 
 ### Latency Budget
@@ -163,9 +175,9 @@ Style#:   Style\s*#?\s*(\w+)
 |---------|----------|-----|
 | **Auth** | Supabase Auth | 50K MAU free, native Swift SDK, anonymous→Apple upgrade, RLS integration |
 | **Database** | Supabase Postgres + pgvector | Bundled with auth, RLS, 512-dim HNSW vector search |
-| **Image Storage** | Cloudflare R2 | Zero egress, 10GB free, S3-compatible presigned URLs, CDN included |
-| **API Hosting** | Fly.io | Cheapest always-on ($2.32/mo), process groups for web+worker, 35+ regions |
-| **Cache / Queue** | Upstash Redis | 500K commands free, serverless, slowapi + ARQ broker |
+| **Image Storage** | Supabase Storage | Bundled with Supabase, 1GB free, auth-integrated, CDN via Supabase transforms |
+| **API Hosting** | Render | Free tier (750 hrs/mo), auto-deploy from GitHub, cold starts ~30s on free |
+| **Cache / Rate Limit** | Upstash Redis | 500K commands free, serverless, slowapi rate limiting |
 | **Task Queue** | ARQ | Native asyncio (matches FastAPI), lightweight, uses same Redis |
 
 ### Architecture Diagram
@@ -173,20 +185,20 @@ Style#:   Style\s*#?\s*(\w+)
 ```
 ┌──────────────┐     ┌──────────────────┐     ┌──────────────────┐
 │  iOS App     │     │  FastAPI          │     │  Supabase        │
-│  (SwiftUI)   │◄───►│  on Fly.io       │◄───►│  Postgres+Auth   │
+│  (SwiftUI)   │◄───►│  on Render       │◄───►│  Postgres+Auth   │
 │              │     │                  │     │  + pgvector      │
-│ supabase-    │     │ Uvicorn          │     │  + RLS           │
-│ swift SDK    │     │ slowapi          │     └──────────────────┘
-│ Apple Sign-In│     │ ARQ workers      │              │
-└──────┬───────┘     └────────┬─────────┘              │
-       │                      │                        │
-       ▼                      ▼                        │
-┌──────────────┐     ┌──────────────────┐              │
-│ Cloudflare   │     │ Upstash Redis    │              │
-│ R2 (images)  │     │ (rate limits +   │──────────────┘
-│ zero egress  │     │  job queue)      │
-│ CDN included │     │ 500K free/mo     │
-└──────────────┘     └──────────────────┘
+│ supabase-    │     │ Uvicorn          │     │  + Storage       │
+│ swift SDK    │     │ slowapi          │     │  + RLS           │
+│ Apple Sign-In│     │ ARQ workers      │     └──────────────────┘
+└──────────────┘     └────────┬─────────┘              │
+                              │                        │
+                              ▼                        │
+                     ┌──────────────────┐              │
+                     │ Upstash Redis    │              │
+                     │ (rate limits +   │──────────────┘
+                     │  job queue)      │
+                     │ 500K free/mo     │
+                     └──────────────────┘
 ```
 
 ### Auth Flow
@@ -355,19 +367,233 @@ Use weighted percentiles (cumulative weight method) when recency weights are app
 - Over $500: round to nearest $10.
 - Never show ranges wider than 5x (if high > 5 * low, add caveats).
 
-### 5.7 Profit Estimation
+### 5.7 Sold vs Active Price Separation
+
+**Critical design decision:** Sold and active prices are computed and displayed separately.
+
+Resellers trust sold prices (what people actually paid) far more than active prices (what sellers are asking). The pricing engine computes ranges independently:
 
 ```
-eBay final value fee: 13.25%
-Default shipping estimate:
-  Clothing: ~$7.50 (USPS Priority)
-  Shoes: ~$12 (USPS Priority)
-  Heavy items: ~$15
+sold_comps = [c for c in filtered_comps if c.status == "sold"]
+active_comps = [c for c in filtered_comps if c.status == "active"]
 
-Estimated profit = Typical Price * (1 - 0.1325) - Shipping - Thrift Price
+sold_range = compute_range(sold_comps)     # Sections 5.2-5.5 applied
+active_range = compute_range(active_comps) # Sections 5.2-5.5 applied
+combined_range = compute_range(filtered_comps)
+
+# sold_range is the primary price shown to users
+# active_range is secondary reference
+# combined_range is fallback when sold data is sparse
 ```
 
-### 5.8 Seasonal Adjustment (Phase 2)
+**Display priority:**
+1. If sold comps >= 3: show sold range prominently, active as secondary
+2. If sold comps < 3 but active >= 3: show active range with caveat "Based on active listings only — no recent sales found"
+3. If total comps < 3: insufficient data
+
+### 5.8 Market Insights (Sell-Through Rate)
+
+```
+sell_through_rate = sold_count / (sold_count + active_count) * 100
+
+# Demand levels
+if sell_through_rate >= 65: demand = "high"
+elif sell_through_rate >= 35: demand = "moderate"
+else: demand = "low"
+
+# Average days to sell (from sold comps with known dates)
+days_to_sell = [comp.days_since_listed for comp in sold_comps if comp.days_since_listed]
+avg_days_to_sell = mean(days_to_sell) if days_to_sell else None
+
+# Volume trend (compare recent vs older)
+last_30_days_sold = len([c for c in sold_comps if c.days_old <= 30])
+prev_30_days_sold = len([c for c in sold_comps if 30 < c.days_old <= 60])
+if prev_30_days_sold == 0:
+    volume_trend = "stable"
+elif last_30_days_sold > prev_30_days_sold * 1.2:
+    volume_trend = "rising"
+elif last_30_days_sold < prev_30_days_sold * 0.8:
+    volume_trend = "declining"
+else:
+    volume_trend = "stable"
+```
+
+### 5.9 Multi-Platform Fee Comparison
+
+**No additional data sources needed — this is pure math applied to the same price estimate.**
+
+Platform fee structures (as of February 2026):
+
+| Platform | Fee Structure | Shipping Model | Notes |
+|----------|--------------|----------------|-------|
+| **eBay** | 13.25% final value fee | Seller pays (~$7.50 clothing) | +$0.30 per order, simplified here |
+| **Poshmark** | 20% flat (items >$15), $2.95 (items ≤$15) | Prepaid label included ($7.97) | Shipping is "free" to seller — built into fee |
+| **Mercari** | 10% selling fee | Seller pays (~$7.50 clothing) | Simple flat rate |
+| **Depop** | 3.3% + $0.45 transaction fee | Seller pays (~$7.50 clothing) | Lowest marketplace fees |
+| **Whatnot** | 8% selling fee | Seller pays (~$7.50 clothing) | Live selling focus |
+
+```python
+PLATFORM_FEES = {
+    "ebay": {
+        "fee_percent": 0.1325,
+        "fixed_fee": 0.30,
+        "shipping_included": False,
+    },
+    "poshmark": {
+        "fee_percent": 0.20,
+        "fee_flat_under_15": 2.95,
+        "fixed_fee": 0,
+        "shipping_included": True,  # buyer pays $7.97 flat
+    },
+    "mercari": {
+        "fee_percent": 0.10,
+        "fixed_fee": 0,
+        "shipping_included": False,
+    },
+    "depop": {
+        "fee_percent": 0.033,
+        "fixed_fee": 0.45,
+        "shipping_included": False,
+    },
+    "whatnot": {
+        "fee_percent": 0.08,
+        "fixed_fee": 0,
+        "shipping_included": False,
+    },
+}
+
+def compute_platform_estimate(gross_price, platform, shipping_cost, estimated_cost=None):
+    config = PLATFORM_FEES[platform]
+
+    if platform == "poshmark" and gross_price <= 15:
+        fees = config["fee_flat_under_15"]
+    else:
+        fees = gross_price * config["fee_percent"] + config.get("fixed_fee", 0)
+
+    shipping = 0 if config["shipping_included"] else shipping_cost
+    net_profit = gross_price - fees - shipping
+    net_after_cost = (net_profit - estimated_cost) if estimated_cost else None
+
+    return {
+        "platform": platform,
+        "feePercent": config["fee_percent"] * 100,
+        "estimatedShipping": shipping,
+        "grossPrice": gross_price,
+        "fees": round(fees, 2),
+        "netProfit": round(net_profit, 2),
+        "netAfterCost": round(net_after_cost, 2) if net_after_cost is not None else None,
+    }
+```
+
+**Shipping cost by garment type** (user-configurable via settings):
+
+| Garment Type | Default Shipping |
+|-------------|-----------------|
+| clothing (shirts, pants, dresses) | $7.50 |
+| shoes | $12.00 |
+| heavy (coats, jackets, suits) | $15.00 |
+| accessories (hats, belts, scarves) | $5.00 |
+
+### 5.10 Buy/Pass Signal Algorithm
+
+The traffic light signal combines confidence, sell-through rate, and profit margin into a single actionable recommendation.
+
+```python
+def compute_buy_signal(
+    confidence_score: int,
+    sell_through_rate: int,
+    best_net_after_cost: float | None,
+    estimated_cost: float | None,
+    user_settings: UserSettings,
+) -> BuySignal:
+    """
+    Returns green/yellow/red signal based on:
+    1. Confidence in the identification
+    2. Sell-through rate (does it actually sell?)
+    3. Profit margin vs user's threshold
+
+    estimated_cost comes from user_settings.default_cost_estimate (store type).
+    It is always available (set in onboarding quiz), so profit component
+    is always computed — no "neutral" fallback needed.
+    """
+
+    # Automatic RED conditions
+    if confidence_score < 30:
+        return BuySignal("red", "Low confidence — identification uncertain")
+    if sell_through_rate == 0 and confidence_score < 55:
+        return BuySignal("red", "No recent sales found, low confidence")
+
+    # Score components (each 0-100)
+    confidence_component = min(confidence_score, 100)
+
+    demand_component = sell_through_rate  # 0-100 directly
+
+    # Profit component (always available — cost comes from settings)
+    if estimated_cost and best_net_after_cost is not None:
+        min_profit = user_settings.min_profit_dollars or 10
+        if best_net_after_cost >= min_profit * 2:
+            profit_component = 100
+        elif best_net_after_cost >= min_profit:
+            profit_component = 70
+        elif best_net_after_cost > 0:
+            profit_component = 40
+        else:
+            profit_component = 0  # Loss
+    else:
+        profit_component = 50  # Fallback (shouldn't happen — cost always set)
+
+    # Weighted composite — profit always matters since cost is always known
+    composite = (
+        confidence_component * 0.25 +
+        demand_component * 0.30 +
+        profit_component * 0.45
+    )
+
+    # Signal thresholds
+    if composite >= 65:
+        signal = "green"
+    elif composite >= 40:
+        signal = "yellow"
+    else:
+        signal = "red"
+
+    # Generate reason
+    reason = generate_signal_reason(signal, sell_through_rate, best_net_after_cost, confidence_score)
+
+    # ROI calculation
+    roi = None
+    if estimated_cost and estimated_cost > 0 and best_net_after_cost:
+        roi = int((best_net_after_cost / estimated_cost) * 100)
+
+    best_platform = find_best_platform(platform_comparison)
+
+    return BuySignal(signal, reason, roi, best_platform)
+```
+
+**Signal meanings for users:**
+
+| Signal | Color | Copy | Behavior |
+|--------|-------|------|----------|
+| Green | `gainGreen` (#5AC53A) | "Good buy" | Large green circle, confident language |
+| Yellow | `gold` (#F6C86A) | "Maybe" | Yellow circle, hedged language |
+| Red | `warning` (#EB5D2A) | "Pass" | Red circle, cautious language |
+
+### 5.11 Profit Estimation (Updated)
+
+```
+Per-platform profit:
+  net_profit = gross_price * (1 - fee_percent) - fixed_fee - shipping
+  net_after_cost = net_profit - estimated_cost
+
+Best platform = platform with highest net_after_cost
+ROI = (net_after_cost / estimated_cost) * 100
+```
+
+`estimated_cost` comes from `user_settings.default_cost_estimate` (derived from store type set in onboarding quiz). It is always available — no "if no price" fallback needed. Users can override per-item by setting `purchase_price` on a specific scan.
+
+Shipping estimates are user-configurable (defaults in Section 5.9). Garment type from YOLO detection maps to shipping category automatically.
+
+### 5.12 Seasonal Adjustment (Phase 2)
 
 Not in MVP. When implemented:
 
@@ -521,14 +747,43 @@ CREATE TABLE public.users (
     updated_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Scans (one row per camera scan)
+-- User Settings (preferences that affect buy/pass signal and profit calculations)
+CREATE TABLE public.user_settings (
+    user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    -- Onboarding quiz answers
+    experience_level TEXT DEFAULT 'beginner',  -- 'beginner', 'intermediate', 'expert'
+    store_type TEXT DEFAULT 'goodwill',        -- 'goodwill', 'salvationArmy', 'consignment', 'vintage', 'garageSale', 'custom'
+    default_cost_estimate DECIMAL(10,2) DEFAULT 7.00,  -- derived from store_type, user-adjustable
+    -- Profit thresholds
+    min_profit_dollars DECIMAL(10,2) DEFAULT 10.00,
+    min_profit_percent INT,              -- null = use dollars mode
+    profit_mode TEXT DEFAULT 'dollars',  -- 'dollars' or 'percent'
+    -- Platform preferences
+    preferred_platforms TEXT[] DEFAULT ARRAY['ebay', 'poshmark'],
+    -- Shipping defaults (user-adjustable)
+    shipping_clothing DECIMAL(10,2) DEFAULT 7.50,
+    shipping_shoes DECIMAL(10,2) DEFAULT 12.00,
+    shipping_heavy DECIMAL(10,2) DEFAULT 15.00,
+    shipping_accessories DECIMAL(10,2) DEFAULT 5.00,
+    -- Display preferences
+    default_price_source TEXT DEFAULT 'sold',  -- 'sold', 'active', 'combined'
+    show_all_platforms BOOLEAN DEFAULT true,
+    -- Timestamps
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Scans (one row per camera scan — also serves as the item library)
 CREATE TABLE public.scans (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
     image_url TEXT NOT NULL,
     tag_image_url TEXT,
     thumbnail_url TEXT,
-    status TEXT DEFAULT 'pending',  -- pending, processing, completed, failed
+    processing_status TEXT DEFAULT 'pending',  -- pending, processing, completed, failed
+    -- Item state (library)
+    item_status TEXT DEFAULT 'scanned',  -- 'scanned', 'bought'
+    purchase_price DECIMAL(10,2),        -- actual price paid (set when marked as bought)
     -- Identification
     predicted_brand TEXT,
     predicted_item_name TEXT,
@@ -537,11 +792,32 @@ CREATE TABLE public.scans (
     predicted_size TEXT,
     predicted_color TEXT,
     predicted_material TEXT,
-    -- Pricing
-    price_low DECIMAL(10,2),
-    price_median DECIMAL(10,2),
-    price_high DECIMAL(10,2),
+    -- Pricing (sold and active separated)
+    sold_price_low DECIMAL(10,2),
+    sold_price_median DECIMAL(10,2),
+    sold_price_high DECIMAL(10,2),
+    sold_comp_count INT DEFAULT 0,
+    active_price_low DECIMAL(10,2),
+    active_price_median DECIMAL(10,2),
+    active_price_high DECIMAL(10,2),
+    active_comp_count INT DEFAULT 0,
+    combined_price_low DECIMAL(10,2),
+    combined_price_median DECIMAL(10,2),
+    combined_price_high DECIMAL(10,2),
     price_currency TEXT DEFAULT 'USD',
+    -- Market insights
+    sell_through_rate INT,            -- 0-100 percentage
+    avg_days_to_sell INT,
+    demand_level TEXT,                -- 'high', 'moderate', 'low'
+    volume_trend TEXT,                -- 'rising', 'stable', 'declining'
+    -- Buy signal
+    buy_signal TEXT,                  -- 'green', 'yellow', 'red'
+    buy_signal_reason TEXT,
+    -- Profit (using default cost estimate from user settings)
+    estimated_cost DECIMAL(10,2),   -- from user_settings.default_cost_estimate
+    best_net_profit DECIMAL(10,2),
+    best_platform TEXT,
+    estimated_roi INT,
     -- Confidence
     confidence_score INT,            -- 0-100
     confidence_level TEXT,           -- high, medium, low, insufficient
@@ -588,14 +864,24 @@ CREATE TABLE public.comps (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Collections ("My Finds")
-CREATE TABLE public.collections (
+-- Listing Drafts (eBay listings generated from scan data)
+CREATE TABLE public.listing_drafts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
     scan_id UUID NOT NULL REFERENCES public.scans(id) ON DELETE CASCADE,
-    notes TEXT,
-    thrift_price DECIMAL(10,2),       -- What user paid at thrift store
-    added_at TIMESTAMPTZ DEFAULT now()
+    user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    platform TEXT DEFAULT 'ebay',
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    category TEXT,
+    condition TEXT DEFAULT 'Pre-owned',
+    suggested_price DECIMAL(10,2),
+    photos TEXT[] DEFAULT '{}',          -- URLs of listing photos (NOT scan photos)
+    status TEXT DEFAULT 'draft',         -- 'draft', 'needsPhotos', 'ready', 'published'
+    external_listing_id TEXT,            -- eBay listing ID after publish
+    external_listing_url TEXT,           -- eBay URL after publish
+    published_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- Visual embeddings for similarity search
@@ -625,11 +911,14 @@ ORDER BY scan_id, field_name, created_at DESC;
 -- Indexes
 CREATE INDEX idx_scans_user_id ON public.scans(user_id);
 CREATE INDEX idx_scans_created_at ON public.scans(created_at DESC);
-CREATE INDEX idx_scans_status ON public.scans(status);
+CREATE INDEX idx_scans_processing_status ON public.scans(processing_status);
+CREATE INDEX idx_scans_item_status ON public.scans(item_status);
+CREATE INDEX idx_scans_user_item_status ON public.scans(user_id, item_status);
 CREATE INDEX idx_corrections_scan_id ON public.corrections(scan_id);
 CREATE INDEX idx_corrections_field ON public.corrections(field_name, original_value);
 CREATE INDEX idx_comps_scan_id ON public.comps(scan_id);
-CREATE INDEX idx_collections_user ON public.collections(user_id);
+CREATE INDEX idx_listing_drafts_scan ON public.listing_drafts(scan_id);
+CREATE INDEX idx_listing_drafts_user ON public.listing_drafts(user_id);
 CREATE INDEX idx_corrected_values_scan ON public.scan_corrected_values(scan_id);
 ```
 
@@ -637,15 +926,20 @@ CREATE INDEX idx_corrected_values_scan ON public.scan_corrected_values(scan_id);
 
 ```sql
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.scans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.corrections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.comps ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.collections ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.listing_drafts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.scan_embeddings ENABLE ROW LEVEL SECURITY;
 
 -- Users: own profile only
 CREATE POLICY "own_profile_select" ON public.users FOR SELECT USING (id = auth.uid());
 CREATE POLICY "own_profile_update" ON public.users FOR UPDATE USING (id = auth.uid());
+
+-- User settings: own settings only
+CREATE POLICY "own_settings_all" ON public.user_settings FOR ALL
+    USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 
 -- Scans: own scans only
 CREATE POLICY "own_scans_select" ON public.scans FOR SELECT USING (user_id = auth.uid());
@@ -659,8 +953,8 @@ CREATE POLICY "own_corrections_insert" ON public.corrections FOR INSERT WITH CHE
 CREATE POLICY "own_comps_select" ON public.comps FOR SELECT
     USING (scan_id IN (SELECT id FROM public.scans WHERE user_id = auth.uid()));
 
--- Collections: own collections only
-CREATE POLICY "own_collections_all" ON public.collections FOR ALL
+-- Listing drafts: own drafts only
+CREATE POLICY "own_listing_drafts_all" ON public.listing_drafts FOR ALL
     USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 
 -- Service role bypasses RLS for backend pipeline writes
@@ -670,38 +964,44 @@ CREATE POLICY "own_collections_all" ON public.collections FOR ALL
 
 ## 8. Image Storage
 
-### Cloudflare R2
+### Supabase Storage
 
-**Upload flow (presigned URLs):**
+**Upload flow (direct from iOS via Supabase Swift SDK):**
 ```
-iOS App                    FastAPI                     Cloudflare R2
-  │                          │                              │
-  │ POST /scans/upload       │                              │
-  │─────────────────────────>│                              │
-  │                          │ generate presigned PUT URL   │
-  │                          │─────────────────────────────>│
-  │ presigned URL + key      │                              │
-  │<─────────────────────────│                              │
-  │                          │                              │
-  │ PUT image directly to R2 │                              │
-  │────────────────────────────────────────────────────────>│
-  │                          │                              │
-  │ POST /scans/confirm      │                              │
-  │─────────────────────────>│ trigger ML pipeline          │
-```
-
-**URL structure:**
-```
-Original:  https://images.thriftflip.app/scans/{user_id}/{uuid}.jpg
-Thumbnail: https://images.thriftflip.app/cdn-cgi/image/width=300,height=300,fit=cover/scans/{user_id}/{uuid}.jpg
-Detail:    https://images.thriftflip.app/cdn-cgi/image/width=800,quality=80/scans/{user_id}/{uuid}.jpg
+iOS App                    Supabase Storage
+  │                              │
+  │ supabase.storage             │
+  │   .from("scan-images")      │
+  │   .upload(path, data)       │
+  │─────────────────────────────>│
+  │                              │
+  │ public URL returned          │
+  │<─────────────────────────────│
+  │                              │
+  │ POST /api/v1/scan            │
+  │   (with image URLs)         │
+  │─────────────────────────────>│ FastAPI (on Render)
 ```
 
-**Image transforms:** Cloudflare on-demand transforms (5K free/mo). At scale, switch to Pillow pre-generation in background worker.
+**Bucket structure:**
+```
+scan-images/
+  {user_id}/
+    {scan_id}_tag.jpg
+    {scan_id}_item.jpg
+    {scan_id}_thumb.jpg
+```
 
-**Presigned URL expiry:** 300 seconds (5 minutes).
+**Supabase Storage policies:**
+- Users can upload to their own folder: `bucket_id = 'scan-images' AND (storage.foldername(name))[1] = auth.uid()`
+- Users can read their own images: same policy on SELECT
+- Service role can read all (for backend processing)
+
+**Image transforms:** Supabase Image Transformation (on Pro plan). On free tier, generate thumbnails server-side with Pillow in FastAPI.
 
 **JPEG compression:** 0.85 quality on client before upload.
+
+**Free tier limit:** 1GB storage, 2GB bandwidth/month. At ~200KB per image pair, supports ~2,500 scans before hitting limit.
 
 ---
 
@@ -711,11 +1011,14 @@ Detail:    https://images.thriftflip.app/cdn-cgi/image/width=800,quality=80/scan
 
 ```python
 # Endpoint limits
-POST /scans:            10/minute per user
-GET  /scans/{id}:       60/minute per user
-POST /scans/{id}/correct: 30/minute per user
-GET  /collection:       60/minute per user
-Global:                 100/minute per IP
+POST /api/v1/scan:                  10/minute per user
+GET  /api/v1/items:                 60/minute per user
+GET  /api/v1/items/{id}:            60/minute per user
+PUT  /api/v1/items/{id}:            30/minute per user
+POST /api/v1/items/{id}/correct:    30/minute per user
+POST /api/v1/items/{id}/listing-draft: 10/minute per user
+GET/PUT /api/v1/settings:           30/minute per user
+Global:                             100/minute per IP
 ```
 
 ### Layer 2: Business Quota (5 Scans/Day)
@@ -814,46 +1117,38 @@ Each field correction creates a separate row in `corrections`.
 
 ### 0-100 Users: ~$0/month
 
-All free tiers: Supabase free (auth + 500MB DB), R2 free (10GB), Fly.io free allowances, Upstash free (500K commands), eBay Browse API free (5K/day).
+All free tiers: Supabase free (auth + 500MB DB + 1GB storage), Render free (750 hrs/mo with cold starts), Upstash free (500K commands), eBay Browse API free (5K/day).
 
-### 100 Users: ~$26-29/month
+### 100 Users: ~$7-12/month
 
 | Service | Cost |
 |---------|------|
-| Supabase Auth + DB (free tier) | $0 |
-| Cloudflare R2 (~33GB) | ~$0.50 |
-| R2 operations | ~$0.20 |
-| Cloudflare transforms (40K beyond free) | ~$20 |
-| Fly.io web (shared-1x 256MB) | ~$3.50 |
-| Fly.io worker (shared-1x, auto-stop) | ~$2-5 |
+| Supabase Auth + DB + Storage (free tier) | $0 |
+| Render (Starter, no cold starts) | $7 |
 | Upstash Redis (free tier) | $0 |
 | eBay Browse API | $0 |
 
-### 1,000 Users: ~$57-80/month (optimized)
+### 1,000 Users: ~$40-55/month
 
 | Service | Cost |
 |---------|------|
-| Supabase Pro (8GB DB) | $25 |
-| Cloudflare R2 (~330GB) | ~$5 |
-| R2 operations | ~$2 |
-| Fly.io web + worker | ~$22-45 |
+| Supabase Pro (8GB DB, 100GB storage) | $25 |
+| Render (Standard) | ~$15-25 |
 | Upstash Redis (~1.5M commands) | ~$3 |
 | eBay Browse API | $0 |
 
-Optimization: Pre-generate thumbnails via Pillow in worker instead of Cloudflare transforms (saves ~$200/mo).
+### 10,000 Users: ~$150-250/month
 
-### 10,000 Users: ~$300-400/month
-
-Supabase Pro ($50-100), R2 (~$50), Fly.io 2x web + 3x worker (~$150), Upstash (~$30), eBay may need caching or paid tier.
+Supabase Pro ($50-100), Render Standard+ (~$50-100), Upstash (~$30), eBay may need caching or paid tier.
 
 ### Cost Cliffs
 
 | Trigger | Action | Added Cost |
 |---------|--------|------------|
 | DB > 500MB | Supabase Pro | +$25/mo |
+| Storage > 1GB | Supabase Pro | +$25/mo (bundled with DB) |
 | Redis > 500K commands | Upstash pay-as-you-go | +$1-30/mo |
-| ML latency on shared CPU | Fly.io dedicated CPU | +$15-30/mo |
-| pgvector > 1M embeddings | Optimize indexes or compute add-on | +$25-50/mo |
+| Cold starts unacceptable | Render Starter ($7) | +$7/mo |
 | eBay > 5K calls/day | Cache aggressively | Variable |
 
 ---
@@ -918,10 +1213,6 @@ struct PricingConfig {
     static let minimumCompsForEstimate: Int = 3
     static let minimumCompsForHighConfidence: Int = 10
 
-    // eBay Fees
-    static let ebayFinalValueFeePercent: Double = 0.1325
-    static let defaultShippingCost: Double = 7.50
-
     // Percentile Ranges
     static let lowPercentile: Double = 10.0
     static let midPercentile: Double = 50.0
@@ -932,6 +1223,23 @@ struct PricingConfig {
     static let rnLookupWeight: Double = 0.25
     static let visualMatchWeight: Double = 0.25
     static let garmentTypeWeight: Double = 0.15
+
+    // Buy Signal Thresholds
+    static let buySignalGreenThreshold: Double = 65.0
+    static let buySignalYellowThreshold: Double = 40.0
+
+    // Sell-Through Rate Thresholds
+    static let highDemandThreshold: Int = 65
+    static let moderateDemandThreshold: Int = 35
+
+    // Default Shipping Costs
+    static let shippingClothing: Double = 7.50
+    static let shippingShoes: Double = 12.00
+    static let shippingHeavy: Double = 15.00
+    static let shippingAccessories: Double = 5.00
+
+    // Default Profit Threshold
+    static let defaultMinProfitDollars: Double = 10.00
 }
 ```
 
@@ -948,8 +1256,6 @@ class PricingConfig:
     MAX_DAYS_OLD = 90
     TRIM_PERCENTAGE = 0.15
     MIN_COMPS_FOR_ESTIMATE = 3
-    EBAY_FVF_PERCENT = 0.1325
-    DEFAULT_SHIPPING = 7.50
 
     # Confidence weights
     COMP_COUNT_W = 0.30
@@ -958,8 +1264,36 @@ class PricingConfig:
     RECENCY_W = 0.15
     MATCH_QUALITY_W = 0.15
 
-    # Tiers
+    # Confidence tiers
     HIGH_CONFIDENCE = 80
     MEDIUM_CONFIDENCE = 55
     LOW_CONFIDENCE = 30
+
+    # Buy signal thresholds
+    BUY_SIGNAL_GREEN = 65
+    BUY_SIGNAL_YELLOW = 40
+
+    # Sell-through rate thresholds
+    HIGH_DEMAND = 65
+    MODERATE_DEMAND = 35
+
+    # Platform fees
+    PLATFORM_FEES = {
+        "ebay":     {"fee_percent": 0.1325, "fixed_fee": 0.30, "shipping_included": False},
+        "poshmark": {"fee_percent": 0.20,   "fee_flat_under_15": 2.95, "fixed_fee": 0, "shipping_included": True},
+        "mercari":  {"fee_percent": 0.10,   "fixed_fee": 0, "shipping_included": False},
+        "depop":    {"fee_percent": 0.033,  "fixed_fee": 0.45, "shipping_included": False},
+        "whatnot":  {"fee_percent": 0.08,   "fixed_fee": 0, "shipping_included": False},
+    }
+
+    # Default shipping costs by garment type
+    SHIPPING_DEFAULTS = {
+        "clothing": 7.50,
+        "shoes": 12.00,
+        "heavy": 15.00,
+        "accessories": 5.00,
+    }
+
+    # Default profit threshold
+    DEFAULT_MIN_PROFIT_DOLLARS = 10.00
 ```

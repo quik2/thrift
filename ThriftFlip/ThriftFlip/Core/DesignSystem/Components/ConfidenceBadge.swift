@@ -22,6 +22,7 @@ struct ConfidenceBadge: View {
         case .high: return TFColor.gainGreen
         case .medium: return TFColor.gold
         case .low: return TFColor.warning
+        case .insufficient: return Color.tfTextSecondary
         }
     }
 
@@ -30,6 +31,7 @@ struct ConfidenceBadge: View {
         case .high: return "High"
         case .medium: return "Medium"
         case .low: return "Low"
+        case .insufficient: return "Insufficient"
         }
     }
 
@@ -92,17 +94,20 @@ struct ConfidenceBadge: View {
         ConfidenceBadge(level: .high, score: 87)
         ConfidenceBadge(level: .medium, score: 62)
         ConfidenceBadge(level: .low, score: 31)
+        ConfidenceBadge(level: .insufficient, score: 12)
 
         HStack(spacing: 12) {
             ConfidenceBadge(level: .high, score: 87, style: .compact)
             ConfidenceBadge(level: .medium, score: 62, style: .compact)
             ConfidenceBadge(level: .low, score: 31, style: .compact)
+            ConfidenceBadge(level: .insufficient, score: 12, style: .compact)
         }
 
         HStack(spacing: 12) {
             ConfidenceBadge(level: .high, score: 87, style: .dotOnly)
             ConfidenceBadge(level: .medium, score: 62, style: .dotOnly)
             ConfidenceBadge(level: .low, score: 31, style: .dotOnly)
+            ConfidenceBadge(level: .insufficient, score: 12, style: .dotOnly)
         }
     }
     .padding()

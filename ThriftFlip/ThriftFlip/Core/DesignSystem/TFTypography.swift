@@ -1,8 +1,8 @@
 import SwiftUI
 
 enum TFFont {
-    static let display = Font.system(size: 42, weight: .bold, design: .default)
-    static let title1 = Font.system(size: 28, weight: .semibold, design: .default)
+    static let display = Font.system(size: 42, weight: .bold, design: .rounded)
+    static let title1 = Font.system(size: 28, weight: .semibold, design: .rounded)
     static let title2 = Font.system(size: 22, weight: .semibold, design: .default)
     static let headline = Font.system(size: 18, weight: .semibold, design: .default)
     static let body = Font.system(size: 16, weight: .regular, design: .default)
