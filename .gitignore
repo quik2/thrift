@@ -1,0 +1,42 @@
+# === macOS ===
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# === Xcode ===
+DerivedData/
+build/
+*.xcuserdata
+xcuserdata/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# === Swift Package Manager ===
+.build/
+Package.resolved
+
+# === Secrets ===
+.env
+.env.*
+
+# === Python ===
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+
+# === IDE ===
+.vscode/
+.idea/
+
+# === Claude Code ===
+.claude/

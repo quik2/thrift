@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ThriftFlip Money Page Mockup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #1f2123;
+      --surface: #2a2c2e;
+      --surface-2: #343739;
+      --ink: #ffffff;
+      --ink-soft: #aeb4ba;
+      --ink-faint: #6d7278;
+      --gain: #5ac53a;
+      --gain-soft: #88d56f;
+      --warn: #f6c86a;
+      --down: #eb5d2a;
+      --edge: rgba(255,255,255,0.12);
+      --glass: rgba(255,255,255,0.05);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Space Grotesk", system-ui, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(1200px 700px at 10% -10%, rgba(90,197,58,0.16), transparent 60%),
+        radial-gradient(1000px 600px at 100% 0%, rgba(246,200,106,0.12), transparent 45%),
+        linear-gradient(165deg, #161719 0%, #1f2123 42%, #191b1d 100%);
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      overflow-x: hidden;
+    }
+
+    .halo {
+      position: fixed;
+      width: 500px;
+      height: 500px;
+      border-radius: 999px;
+      filter: blur(70px);
+      pointer-events: none;
+      opacity: 0.28;
+      animation: float 7s ease-in-out infinite alternate;
+    }
+
+    .halo.h1 { background: #5ac53a; top: -120px; left: -120px; }
+    .halo.h2 {
+      background: #f6c86a;
+      bottom: -180px;
+      right: -140px;
+      animation-delay: 1.2s;
+    }
+
+    @keyframes float {
+      from { transform: translateY(0px) translateX(0px); }
+      to { transform: translateY(26px) translateX(18px); }
+    }
+
+    .phone {
+      width: 100%;
+      max-width: 430px;
+      border-radius: 42px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.01));
+      border: 1px solid rgba(255,255,255,0.18);
+      box-shadow:
+        0 30px 80px rgba(0,0,0,0.65),
+        inset 0 1px 0 rgba(255,255,255,0.1);
+      backdrop-filter: blur(20px);
+      padding: 18px 14px 14px;
+      position: relative;
+      overflow: hidden;
+      animation: reveal 500ms ease-out;
+    }
+
+    @keyframes reveal {
+      from { transform: translateY(24px) scale(0.985); opacity: 0; }
+      to { transform: translateY(0) scale(1); opacity: 1; }
+    }
+
+    .notch {
+      position: absolute;
+      width: 34%;
+      height: 26px;
+      left: 33%;
+      top: 8px;
+      border-radius: 0 0 16px 16px;
+      background: #0f1011;
+      border: 1px solid #2f3134;
+      border-top: 0;
+      opacity: 0.9;
+      z-index: 4;
+    }
+
+    .screen {
+      border-radius: 30px;
+      overflow: hidden;
+      background: var(--bg);
+      border: 1px solid rgba(255,255,255,0.08);
+      position: relative;
+    }
+
+    .screen::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(900px 350px at 20% -10%, rgba(90,197,58,0.16), transparent 50%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .ui {
+      position: relative;
+      z-index: 1;
+      padding: 18px 14px 88px;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .avatar {
+      width: 30px;
+      height: 30px;
+      border-radius: 999px;
+      background: linear-gradient(130deg, #5ac53a, #f6c86a);
+      color: #121314;
+      font-weight: 700;
+      display: grid;
+      place-items: center;
+      font-size: 12px;
+      border: 1px solid rgba(255,255,255,0.35);
+    }
+
+    .title {
+      font-size: 15px;
+      letter-spacing: 0.02em;
+      color: var(--ink-soft);
+      font-weight: 500;
+    }
+
+    .gear {
+      width: 28px;
+      height: 28px;
+      border-radius: 10px;
+      border: 1px solid var(--edge);
+      background: var(--glass);
+      display: grid;
+      place-items: center;
+      color: var(--ink-soft);
+      font-size: 13px;
+    }
+
+    .hero {
+      text-align: center;
+      margin-bottom: 14px;
+    }
+
+    .value {
+      font-size: clamp(42px, 13vw, 50px);
+      line-height: 1;
+      margin: 8px 0 4px;
+      font-weight: 700;
+      color: var(--gain);
+      text-shadow: 0 0 20px rgba(90,197,58,0.3);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .sub {
+      font-size: 12px;
+      color: var(--ink-soft);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .gainline {
+      margin-top: 10px;
+      color: var(--gain-soft);
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .roi {
+      margin-top: 2px;
+      color: var(--gain);
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 13px;
+    }
+
+    .panel {
+      background: linear-gradient(180deg, rgba(52,55,57,0.65), rgba(36,38,40,0.8));
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 20px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+      padding: 12px;
+    }
+
+    .chart-wrap {
+      margin-top: 10px;
+    }
+
+    .chart-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      color: var(--ink-soft);
+      font-size: 12px;
+    }
+
+    .chart {
+      width: 100%;
+      height: 120px;
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(14,16,17,0.2), rgba(14,16,17,0.05));
+      border: 1px solid rgba(255,255,255,0.08);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .axis-fade {
+      position: absolute;
+      inset: auto 0 0 0;
+      height: 35%;
+      background: linear-gradient(180deg, transparent, rgba(90,197,58,0.08));
+      pointer-events: none;
+    }
+
+    svg { display: block; width: 100%; height: 100%; }
+
+    .dot {
+      fill: var(--gain);
+      filter: drop-shadow(0 0 5px rgba(90,197,58,0.5));
+    }
+
+    .tooltip {
+      position: absolute;
+      padding: 6px 8px;
+      border-radius: 10px;
+      background: rgba(16,17,18,0.95);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: #d9ffce;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 11px;
+      transform: translate(-50%, -130%);
+      pointer-events: none;
+      white-space: nowrap;
+      opacity: 0;
+      transition: opacity 150ms ease;
+    }
+
+    .ranges {
+      margin-top: 10px;
+      display: flex;
+      gap: 8px;
+    }
+
+    .chip {
+      flex: 1;
+      text-align: center;
+      padding: 8px 6px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.04);
+      font-size: 12px;
+      color: var(--ink-soft);
+      font-weight: 500;
+    }
+
+    .chip.active {
+      color: #0f1611;
+      background: linear-gradient(180deg, #9fed84, #72d754);
+      border-color: #8ce774;
+      box-shadow: 0 6px 18px rgba(90,197,58,0.35);
+    }
+
+    .stats {
+      margin-top: 12px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .stat {
+      border-radius: 14px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.1);
+      padding: 10px;
+      min-height: 74px;
+    }
+
+    .stat .k {
+      font-size: 22px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .stat .l {
+      margin-top: 4px;
+      color: var(--ink-soft);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+    }
+
+    .section-row {
+      margin-top: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--ink-soft);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .linkish { color: var(--gain-soft); font-size: 11px; }
+
+    .filters {
+      margin-top: 10px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .filter {
+      padding: 7px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.03);
+      color: var(--ink-soft);
+      font-size: 11px;
+    }
+
+    .filter.active {
+      color: #122014;
+      background: linear-gradient(180deg, #a8f28f, #7dda5e);
+      border-color: #a1ee8a;
+      font-weight: 600;
+    }
+
+    .grid {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .item {
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: #2d3033;
+    }
+
+    .thumb {
+      aspect-ratio: 1/1;
+      background:
+        linear-gradient(145deg, rgba(246,200,106,0.2), rgba(90,197,58,0.12)),
+        repeating-linear-gradient(45deg, #2f3235, #2f3235 8px, #2a2d2f 8px, #2a2d2f 16px);
+      position: relative;
+    }
+
+    .badge {
+      position: absolute;
+      left: 6px;
+      bottom: 6px;
+      font-size: 9px;
+      padding: 4px 6px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.7);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: #d8ffcc;
+      letter-spacing: 0.06em;
+    }
+
+    .meta {
+      padding: 8px 7px 9px;
+    }
+
+    .brand {
+      font-size: 11px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: #ebeef1;
+      font-weight: 600;
+    }
+
+    .price {
+      margin-top: 2px;
+      font-size: 11px;
+      color: var(--gain-soft);
+      font-family: "IBM Plex Mono", monospace;
+    }
+
+    .tabbar {
+      position: absolute;
+      left: 10px;
+      right: 10px;
+      bottom: 10px;
+      height: 64px;
+      border-radius: 22px;
+      background: rgba(39,41,44,0.84);
+      border: 1px solid rgba(255,255,255,0.13);
+      backdrop-filter: blur(16px);
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      align-items: center;
+      text-align: center;
+      color: var(--ink-soft);
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .tab.active {
+      color: #101411;
+      font-weight: 700;
+    }
+
+    .tab.active .doticon {
+      background: linear-gradient(180deg, #acef95, #6fd450);
+      border-color: #a4ea8d;
+      box-shadow: 0 8px 18px rgba(90,197,58,0.3);
+    }
+
+    .doticon {
+      margin: 0 auto 5px;
+      width: 24px;
+      height: 24px;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      display: grid;
+      place-items: center;
+      font-size: 11px;
+      color: inherit;
+    }
+
+    @media (max-width: 430px) {
+      body { padding: 6px; }
+      .phone { border-radius: 0; max-width: 100vw; min-height: 100vh; padding: 0; border: 0; box-shadow: none; }
+      .notch { display: none; }
+      .screen { border-radius: 0; min-height: 100vh; }
+      .ui { padding: 14px 12px 86px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="halo h1"></div>
+  <div class="halo h2"></div>
+
+  <main class="phone">
+    <div class="notch"></div>
+    <section class="screen">
+      <div class="ui">
+        <header class="topbar">
+          <div class="avatar">QK</div>
+          <div class="title">My Collection</div>
+          <div class="gear">⚙</div>
+        </header>
+
+        <section class="hero">
+          <div class="sub">Total Collection Value</div>
+          <div class="value" id="portfolioValue">$2,847</div>
+          <div class="gainline">+$2,762 from $85 spent</div>
+          <div class="roi">▲ 3,249% ROI</div>
+        </section>
+
+        <section class="panel chart-wrap">
+          <div class="chart-head">
+            <span>Portfolio Trend</span>
+            <span id="chartDate">All Time</span>
+          </div>
+          <div class="chart" id="chartArea">
+            <svg viewBox="0 0 320 120" preserveAspectRatio="none" aria-label="portfolio trend chart">
+              <defs>
+                <linearGradient id="lineGlow" x1="0" x2="1" y1="0" y2="0">
+                  <stop offset="0%" stop-color="#88d56f"/>
+                  <stop offset="100%" stop-color="#5ac53a"/>
+                </linearGradient>
+              </defs>
+              <polyline id="line" fill="none" stroke="url(#lineGlow)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"
+                points="0,95 22,91 44,86 66,88 88,79 110,74 132,70 154,73 176,62 198,56 220,51 242,48 264,43 286,36 320,29"></polyline>
+              <circle id="dot" class="dot" cx="320" cy="29" r="4"></circle>
+            </svg>
+            <div class="axis-fade"></div>
+            <div class="tooltip" id="tooltip">$2,847</div>
+          </div>
+          <div class="ranges">
+            <div class="chip">1W</div>
+            <div class="chip">1M</div>
+            <div class="chip">3M</div>
+            <div class="chip active">ALL</div>
+          </div>
+        </section>
+
+        <section class="stats">
+          <article class="stat"><div class="k">47</div><div class="l">Items</div></article>
+          <article class="stat"><div class="k">$60.57</div><div class="l">Avg Value</div></article>
+          <article class="stat"><div class="k">12🔥</div><div class="l">Streak</div></article>
+        </section>
+
+        <div class="section-row">
+          <span>Portfolio Items</span>
+          <span class="linkish">Sort: Value</span>
+        </div>
+
+        <div class="filters">
+          <div class="filter active">All</div>
+          <div class="filter">Listed</div>
+          <div class="filter">Sold</div>
+          <div class="filter">Saved</div>
+        </div>
+
+        <section class="grid">
+          <article class="item">
+            <div class="thumb"><span class="badge">NEW FIND</span></div>
+            <div class="meta"><div class="brand">Patagonia</div><div class="price">$62-$115</div></div>
+          </article>
+          <article class="item">
+            <div class="thumb"><span class="badge">LISTED</span></div>
+            <div class="meta"><div class="brand">Lululemon</div><div class="price">$45-$70</div></div>
+          </article>
+          <article class="item">
+            <div class="thumb"><span class="badge">SOLD</span></div>
+            <div class="meta"><div class="brand">Nike</div><div class="price">$30-$50</div></div>
+          </article>
+          <article class="item">
+            <div class="thumb"></div>
+            <div class="meta"><div class="brand">Carhartt</div><div class="price">$35-$55</div></div>
+          </article>
+          <article class="item">
+            <div class="thumb"></div>
+            <div class="meta"><div class="brand">Free People</div><div class="price">$28-$42</div></div>
+          </article>
+          <article class="item">
+            <div class="thumb"></div>
+            <div class="meta"><div class="brand">Coach</div><div class="price">$40-$65</div></div>
+          </article>
+        </section>
+      </div>
+
+      <nav class="tabbar">
+        <div class="tab"><div class="doticon">◉</div>Scan</div>
+        <div class="tab active"><div class="doticon">◻</div>Collection</div>
+        <div class="tab"><div class="doticon">$</div>Sell</div>
+      </nav>
+    </section>
+  </main>
+
+  <script>
+    const chartArea = document.getElementById('chartArea');
+    const dot = document.getElementById('dot');
+    const tooltip = document.getElementById('tooltip');
+    const value = document.getElementById('portfolioValue');
+    const chartDate = document.getElementById('chartDate');
+
+    const points = [
+      { x: 0, y: 95, v: 512, d: 'Apr 12' },
+      { x: 22, y: 91, v: 623, d: 'Apr 27' },
+      { x: 44, y: 86, v: 702, d: 'May 07' },
+      { x: 66, y: 88, v: 689, d: 'May 16' },
+      { x: 88, y: 79, v: 904, d: 'Jun 03' },
+      { x: 110, y: 74, v: 1015, d: 'Jun 18' },
+      { x: 132, y: 70, v: 1130, d: 'Jul 04' },
+      { x: 154, y: 73, v: 1058, d: 'Jul 22' },
+      { x: 176, y: 62, v: 1310, d: 'Aug 11' },
+      { x: 198, y: 56, v: 1490, d: 'Sep 02' },
+      { x: 220, y: 51, v: 1678, d: 'Sep 28' },
+      { x: 242, y: 48, v: 1814, d: 'Oct 19' },
+      { x: 264, y: 43, v: 2050, d: 'Nov 06' },
+      { x: 286, y: 36, v: 2356, d: 'Dec 02' },
+      { x: 320, y: 29, v: 2847, d: 'Now' }
+    ];
+
+    function setPoint(p) {
+      dot.setAttribute('cx', p.x);
+      dot.setAttribute('cy', p.y);
+      tooltip.textContent = `$${p.v.toLocaleString()}`;
+      value.textContent = `$${p.v.toLocaleString()}`;
+      chartDate.textContent = p.d;
+
+      const r = chartArea.getBoundingClientRect();
+      const tx = (p.x / 320) * r.width;
+      const ty = (p.y / 120) * r.height;
+      tooltip.style.left = `${tx}px`;
+      tooltip.style.top = `${ty}px`;
+      tooltip.style.opacity = '1';
+    }
+
+    chartArea.addEventListener('mousemove', (e) => {
+      const rect = chartArea.getBoundingClientRect();
+      const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      const target = x * 320;
+      let nearest = points[0];
+      let min = Infinity;
+      for (const p of points) {
+        const d = Math.abs(p.x - target);
+        if (d < min) { min = d; nearest = p; }
+      }
+      setPoint(nearest);
+    });
+
+    chartArea.addEventListener('mouseleave', () => {
+      setPoint(points[points.length - 1]);
+    });
+
+    setPoint(points[points.length - 1]);
+  </script>
+</body>
+</html>
